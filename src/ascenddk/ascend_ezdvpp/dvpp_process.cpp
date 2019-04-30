@@ -707,8 +707,8 @@ int DvppProcess::DvppBasicVpc(const uint8_t *input_buf, int32_t input_size,
                 MAP_PRIVATE | MAP_ANONYMOUS | API_MAP_VA32BIT, -1, 0);
         if (out_buffer == MAP_FAILED) {
             ASC_LOG_ERROR("4K memory malloc still fail.");
+            return kDvppErrorMallocFail;
         }
-        return kDvppErrorMallocFail;
     }
 
     // constructing output roi configuration
