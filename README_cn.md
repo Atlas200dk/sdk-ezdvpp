@@ -1,18 +1,18 @@
-EN|[CN](README_cn.md)
+中文|[英文](README.md)
 
-## Description<a name="en-us_topic_0165443699_section733845520614"></a>
+##描述
 
-The EZDVPP encapsulates the DVPP APIs to simplify the calls. The main functions include:
+EZDVPP对DVPP接口进行了封装，用于简化直接调用DVPP接口的复杂度，主要功能包括：
 
-Image format conversion \(including YUV to JPG, YUV to H.264, and JPEG to YUV\), image cropping, and image resizing.
+图像格式转化（包含将YUV转换为JPG，YUV转换为H264，JPEG转换为YUV），图像的crop以及图像的resize。
 
-The methods of using EZDVPP APIs are as follows:
+EZDVPP接口的使用方法如下：
 
--   Image format conversion
-    -   Convert YUV data streams obtained by the camera into JPG data streams.
+-   图像格式转化
+    -   将摄像头获取的YUV格式的数据流转换为JPG格式的数据流。
 
         ```
-        // Interface usage example: YUV-to-JPG conversion
+        //接口使用示例：YUV转换JPG
         typedef struct DvppOutputInfo {
         //output buffer
         unsigned char *pbuf;
@@ -20,21 +20,21 @@ The methods of using EZDVPP APIs are as follows:
         unsigned int size;
         } DvppOutput;
         Ascend::Utils::DvppProcess *pDvppProcess=nullptr;
-        // Initialization parameter for converting YUV into JPG
+        //初始化参数：用于将YUV转化为JPG
         dvppToJpgPara.format = JPGENC_FORMAT_NV12;
         dvppToJpgPara.level = DVPP_TO_JPG_QUALITY_PARAMETER;
         dvppToJpgPara.resolution.height = height;
         dvppToJpgPara.resolution.width = width;
-        // Instantiated class variable
+        //实例化类变量
         pDvppProcess = new Ascend::Utils::DvppProcess(dvppToJpgPara);
-        // Conversion interface. dvppOutput.pbuf is the converted JPG data.
+        //调用转化接口，dvppOutput.pbuf即为转换后的JPG数据
         pDvppProcess->DvppOperationProc(inputbuf,inputbufSize,&dvppOutput)
         ```
 
-    -   Convert YUV data streams obtained by the camera into H.264 data streams.
+    -   将摄像头获取的YUV格式的数据流转换为H264格式的数据流。
 
         ```
-        // Interface usage example: YUV-to-H.264 conversion
+        //接口使用示例：YUV转H264
         struct DvppOutput {
             unsigned char *buffer;  // output buffer
             unsigned int size;  // size of output buffer
@@ -53,10 +53,10 @@ The methods of using EZDVPP APIs are as follows:
                                        &dvpp_output);
         ```
 
-    -   JPEG-to-YUV conversion: Convert an input JPEG image into a YUV image. The JPEG \(color space: YUV, subsample: 444/422/420/400\) supports only Huffman coding and does not support arithmetic coding, progressive coding, or JPEG 2000 format.
+    -   JPEG转YUV：将输入JPEG格式的图片转化为YUV图像，其中JPEG \(colorspace: yuv, subsample: 444/422/420/400 \)只支持huffman编码，不支持算术编码，不支持渐进编码，不支持jpeg2000格式
 
         ```
-        Interface 4: JPEG-to-YUV conversion
+        接口四：JPEG转化为YUV
         struct DvppJpegDOutput {
             unsigned char *buffer;  // output buffer
             uint32_t buffer_size;  // output buffer size
@@ -76,12 +76,12 @@ The methods of using EZDVPP APIs are as follows:
         ```
 
 
--   Image cropping, image resizing, and format conversion
+-   图像的crop/resize/格式转化
 
-    Convert the input YUV444SP/YUV422SP/YUV420SP/YUV444Packed/YUV422Packed/BGR/RGB/ARGB/ABGR/RGBA/BGRA image into a YUV420SP image and perform image cropping and resizing.
+    将输入的YUV444SP/YUV422SP/YUV420SP/YUV444Packed/YUV422Packed/BGR/RGB/ARGB/ABGR/RGBA/BGRA等格式图像转化为YUV420SP格式的图像，并对图像进行crop与resize操作
 
     ```
-    // Interface usage example: format conversion and image resizing (In this sample code, image cropping is not performed.)
+    //接口使用示例：对图像进行格式转换、resize操作（本代码示例未进行crop）。
     struct DvppVpcOutput {
         uint8_t *buffer;
         uint32_t size;
