@@ -1,6 +1,5 @@
 EN|[CN](README_cn.md)
 
-## Description<a name="en-us_topic_0165443699_section733845520614"></a>
 
 The EZDVPP encapsulates the DVPP APIs to simplify the calls. The main functions include:
 
