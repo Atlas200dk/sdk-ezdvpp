@@ -526,7 +526,7 @@ int DvppUtils::AllocYuvOrRgbPackedBuffer(const uint8_t * src_data,
     int even_high = (high >> 1) << 1;
 
     // If the input image is aligned , directly copy all memory.
-    if ((dest_width == dest_align_width && high == align_high)
+    if ((src_width == dest_align_width && high == align_high)
             || is_input_align) {
         ret = memcpy_s(dest_data, dest_buffer_size, src_data, input_size);
         CHECK_CROP_RESIZE_MEMCPY_RESULT(ret, dest_buffer_size, dest_data);
