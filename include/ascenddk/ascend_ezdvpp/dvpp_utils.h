@@ -35,7 +35,7 @@
 #define ASCENDDK_ASCEND_EZDVPP_DVPP_UTILS_H_
 
 #include "dvpp_data_type.h"
-#include "toolchain/slog.h"
+#include "hiaiengine/log.h"
 
 #define CHECK_MEMCPY_RESULT(ret, buffer) \
 if (ret != EOK) { \
@@ -84,7 +84,7 @@ if (buffer == MAP_FAILED) { \
 }
 
 #define ASC_LOG_ERROR(fmt, ...) \
-dlog_error(ASCENDDK, "[%s:%d] " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__)
+HIAI_ENGINE_LOG(HIAI_GRAPH_INVALID_VALUE, "[%s:%d] " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__)
 
 namespace ascend {
 namespace utils {
