@@ -169,18 +169,6 @@ struct DvppToJpgPara {
     bool is_align_image = false;
 };
 
-struct DvppToH264Para {
-    // coding protocol. 0:H265-main level 1:H264-baseline level
-    //                  2:H264-main level 3:H264-high level
-    int coding_type = 3;
-
-    // YUV storage method.0:YUV420 semi-planner 1:YVU420 semi-planner
-    int yuv_store_type = 0;
-
-    // resolution
-    ResolutionRatio resolution;
-};
-
 struct DvppOutput {
     unsigned char *buffer;  // output buffer
     unsigned int size;  // size of output buffer

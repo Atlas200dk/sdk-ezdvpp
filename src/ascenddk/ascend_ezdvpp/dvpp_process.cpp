@@ -75,37 +75,8 @@ int DvppProcess::DvppOperationProc(const char *input_buf, int input_size,
                                    DvppOutput *output_data) {
     int ret = kDvppOperationOk;
 
-    // yuv change to h264
-    if (convert_mode_ == kH264) {
-        shared_ptr<AutoBuffer> output_data_queue;
-
-        // process of coversion
-        ret = DvppYuvChangeToH264(input_buf, input_size, &output_data_queue);
-        if (ret != kDvppOperationOk) {
-            return ret;
-        }
-
-        // check data size
-        ret = DvppUtils::CheckDataSize(output_data_queue->getBufferSize());
-        if (ret != kDvppOperationOk) {
-            ASC_LOG_ERROR(
-                    "To prevent excessive memory, data size should be in "
-                    "(0, 64]M! Now data size is %d byte.",
-                    output_data_queue->getBufferSize());
-            return ret;
-        }
-
-        // new output buffer
-        output_data->buffer = new (nothrow) unsigned char[output_data_queue
-                ->getBufferSize()];
-        CHECK_NEW_RESULT(output_data->buffer);
-
-        // output the h264 data
-        output_data->size = output_data_queue->getBufferSize();
-        ret = memcpy_s(output_data->buffer, output_data_queue->getBufferSize(),
-                       output_data_queue->getBuffer(), output_data->size);
-        CHECK_MEMCPY_RESULT(ret, output_data->buffer);  // if error,program exit
-    } else if (convert_mode_ == kJpeg) {  // yuv change to jpg
+    // yuv change to jpg
+    if (convert_mode_ == kJpeg) {
         sJpegeOut jpg_output_data;
 
         // yuv change jpg
@@ -412,61 +383,6 @@ int DvppProcess::DvppYuvChangeToJpeg(const char *input_buf, int input_size,
                (unsigned) (ALIGN_UP(input_data.bufSize + kJpegEAddressAlgin,
                                     MAP_2M)));
     }
-
-    return ret;
-}
-
-int DvppProcess::DvppYuvChangeToH264(const char *input_buf, int input_size,
-                                     shared_ptr<AutoBuffer> *output_buf) {
-    // YUV width/height/coding protocol/stroage type
-    venc_in_msg venc_msg;
-    venc_msg.width = dvpp_instance_para_.h264_para.resolution.width;
-    venc_msg.height = dvpp_instance_para_.h264_para.resolution.height;
-    venc_msg.coding_type = dvpp_instance_para_.h264_para.coding_type;
-    venc_msg.YUV_store_type = dvpp_instance_para_.h264_para.yuv_store_type;
-    venc_msg.input_data = const_cast<char*>(input_buf);
-    venc_msg.input_data_size = input_size;
-    venc_msg.output_data_queue = make_shared<AutoBuffer>();
-
-    dvppapi_ctl_msg dvpp_api_ctl_msg;
-    dvpp_api_ctl_msg.in = (void*) (&venc_msg);
-    dvpp_api_ctl_msg.in_size = sizeof(venc_in_msg);
-
-    // create Dvpp instance
-    IDVPPAPI *dvpp_api = nullptr;
-    int ret = CreateDvppApi(dvpp_api);
-
-    // success to create a dvpp instance.
-    if ((dvpp_api != nullptr) && (ret != kDvppReturnError)) {
-        // convert
-        if (DvppCtl(dvpp_api, DVPP_CTL_VENC_PROC, &dvpp_api_ctl_msg)
-                == kDvppReturnError) {
-            // failed to convert.
-            ret = kDvppErrorDvppCtlFail;
-            ASC_LOG_ERROR("Failed to convert in dvpp(yuv to h264).");
-            DestroyDvppApi(dvpp_api);
-            return ret;
-        }
-
-        // check the output date.
-        if ((dvpp_api_ctl_msg.in == nullptr)
-                || ((dvpp_api_ctl_msg.in != nullptr)
-                        && (((venc_in_msg *) (dvpp_api_ctl_msg.in))
-                                ->output_data_queue == nullptr))) {
-            ret = kDvppErrorNoOutputInfo;
-            ASC_LOG_ERROR("Failed to get data in dvpp(yuv to h264).");
-            DestroyDvppApi(dvpp_api);
-            return ret;
-        }
-
-        *output_buf = venc_msg.output_data_queue;
-    } else {  // failed to create dvpp.
-        ASC_LOG_ERROR("Failed to create instance of dvpp(yuv to h264).");
-        return kDvppErrorCreateDvppFail;
-    }
-
-    // destroy Dvpp instance
-    DestroyDvppApi(dvpp_api);
 
     return ret;
 }

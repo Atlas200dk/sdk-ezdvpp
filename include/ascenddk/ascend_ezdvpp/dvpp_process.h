@@ -52,12 +52,6 @@ public:
 
     /**
      * @brief class constructor
-     * @param [in] DvppToJpgPara para: instance h264 object
-     */
-    DvppProcess(const DvppToH264Para &para);
-
-    /**
-     * @brief class constructor
      * @param [in] DvppBasicVpcPara para: instance basic vpc object
      */
     DvppProcess(const DvppBasicVpcPara &para);
@@ -72,9 +66,7 @@ public:
     virtual ~DvppProcess();
 
     /**
-     * @brief Dvpp change from yuv to jpg or h264(if you use jpg object,
-     *        then dvpp output jpeg data.if you use h264 object,then dvpp
-     *        output h264 data.)
+     * @brief Dvpp change from yuv to jpg
      * @param [in] char *input_buf: yuv data buffer
      *             (dvpp need char *,so pInputBuf do not use const)
      * @param [in] int input_size  : size of yuv data buffer
@@ -135,18 +127,6 @@ private:
      * @return  enum DvppErrorCode
      */
     int DvppProc(const sJpegeIn &input_data, sJpegeOut *output_data);
-
-    /**
-     * @brief Dvpp change from yuv to h264
-     * @param [in] char *input_buf: yuv data buffer
-     *             (dvpp need char *,so pInputBuf do not use const)
-     * @param [in] int input_size  : size of yuv data buffer
-     * @param [out]shared_ptr<AutoBuffer> *output_buf :dvpp output buffer
-     *        and size
-     * @return  enum DvppErrorCode
-     */
-    int DvppYuvChangeToH264(const char *input_buf, int input_size,
-                            shared_ptr<AutoBuffer> *output_buf);
 
     /**
      * @brief new vpc interface, include crop/resize/image format conversion
