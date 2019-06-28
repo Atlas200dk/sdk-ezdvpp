@@ -3,12 +3,13 @@ EN|[CN](README_cn.md)
 
 The EZDVPP encapsulates the DVPP APIs to simplify the calls. The main functions include:
 
-Image format conversion \(including YUV to JPG, YUV to H.264, and JPEG to YUV\), image cropping, and image resizing.
+Image format conversion \(including YUV to JPG, and JPEG to YUV\), image cropping, and image resizing.
 
 The methods of using EZDVPP APIs are as follows:
 
 -   Image format conversion
-    -   Convert YUV data streams obtained by the camera into JPG data streams.
+
+    -  Convert YUV data streams obtained by the camera into JPG data streams.
 
         ```
         // Interface usage example: YUV-to-JPG conversion
@@ -30,27 +31,6 @@ The methods of using EZDVPP APIs are as follows:
         pDvppProcess->DvppOperationProc(inputbuf,inputbufSize,&dvppOutput)
         ```
 
-    -   Convert YUV data streams obtained by the camera into H.264 data streams.
-
-        ```
-        // Interface usage example: YUV-to-H.264 conversion
-        struct DvppOutput {
-            unsigned char *buffer;  // output buffer
-            unsigned int size;  // size of output buffer
-        };
-        ascend::utils::DvppToH264Para dvpp_to_h264_para;
-        // instance(convert to h264)
-        dvpp_to_h264_para.coding_type = ascend::utils::kH264High;
-        dvpp_to_h264_para.yuv_store_type = ascend::utils::kYuv420sp;
-        dvpp_to_h264_para.resolution.width = width;
-        dvpp_to_h264_para.resolution.height = height;
-        ascend::utils::DvppProcess dvpp_process(dvpp_to_h264_para);
-        // DVPP conversion
-        ascend::utils::DvppOutput dvpp_output = { nullptr, 0 };
-        dvpp_process.DvppOperationProc(buffer, 
-                                       buffer_size,
-                                       &dvpp_output);
-        ```
 
     -   JPEG-to-YUV conversion: Convert an input JPEG image into a YUV image. The JPEG \(color space: YUV, subsample: 444/422/420/400\) supports only Huffman coding and does not support arithmetic coding, progressive coding, or JPEG 2000 format.
 

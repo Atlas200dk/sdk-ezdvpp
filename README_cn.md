@@ -3,7 +3,7 @@
 
 EZDVPP对DVPP接口进行了封装，用于简化直接调用DVPP接口的复杂度，主要功能包括：
 
-图像格式转化（包含将YUV转换为JPG，YUV转换为H264，JPEG转换为YUV），图像的crop以及图像的resize。
+图像格式转化（包含将YUV转换为JPG，JPEG转换为YUV），图像的crop以及图像的resize。
 
 EZDVPP接口的使用方法如下：
 
@@ -28,28 +28,6 @@ EZDVPP接口的使用方法如下：
         pDvppProcess = new Ascend::Utils::DvppProcess(dvppToJpgPara);
         //调用转化接口，dvppOutput.pbuf即为转换后的JPG数据
         pDvppProcess->DvppOperationProc(inputbuf,inputbufSize,&dvppOutput)
-        ```
-
-    -   将摄像头获取的YUV格式的数据流转换为H264格式的数据流。
-
-        ```
-        //接口使用示例：YUV转H264
-        struct DvppOutput {
-            unsigned char *buffer;  // output buffer
-            unsigned int size;  // size of output buffer
-        };
-        ascend::utils::DvppToH264Para dvpp_to_h264_para;
-        // instance(convert to h264)
-        dvpp_to_h264_para.coding_type = ascend::utils::kH264High;
-        dvpp_to_h264_para.yuv_store_type = ascend::utils::kYuv420sp;
-        dvpp_to_h264_para.resolution.width = width;
-        dvpp_to_h264_para.resolution.height = height;
-        ascend::utils::DvppProcess dvpp_process(dvpp_to_h264_para);
-        // DVPP conversion
-        ascend::utils::DvppOutput dvpp_output = { nullptr, 0 };
-        dvpp_process.DvppOperationProc(buffer, 
-                                       buffer_size,
-                                       &dvpp_output);
         ```
 
     -   JPEG转YUV：将输入JPEG格式的图片转化为YUV图像，其中JPEG \(colorspace: yuv, subsample: 444/422/420/400 \)只支持huffman编码，不支持算术编码，不支持渐进编码，不支持jpeg2000格式
