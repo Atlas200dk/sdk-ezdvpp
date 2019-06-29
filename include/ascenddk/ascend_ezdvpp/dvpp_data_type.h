@@ -229,7 +229,6 @@ struct DvppJpegDOutput {
 
 struct DvppPara {
     DvppToJpgPara jpg_para;
-    DvppToH264Para h264_para;
     DvppJpegDInPara jpegd_para;
     DvppBasicVpcPara basic_vpc_para;
 };
