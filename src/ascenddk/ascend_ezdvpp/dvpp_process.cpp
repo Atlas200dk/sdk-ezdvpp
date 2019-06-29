@@ -49,12 +49,6 @@ DvppProcess::DvppProcess(const DvppToJpgPara &para) {
     convert_mode_ = kJpeg;
 }
 
-DvppProcess::DvppProcess(const DvppToH264Para &para) {
-    // construct a instance used to convert to h264
-    dvpp_instance_para_.h264_para = para;
-    convert_mode_ = kH264;
-}
-
 DvppProcess::DvppProcess(const DvppBasicVpcPara &para) {
     // construct a instance used to crop or resize image
     dvpp_instance_para_.basic_vpc_para = para;
