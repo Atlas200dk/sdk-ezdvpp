@@ -428,9 +428,10 @@ int DvppProcess::DvppJpegChangeToYuv(const char *input_buf, int input_size,
     // than the actual bitstream.
     jpegd_in_data.jpeg_data_size = input_size + JPEGD_IN_BUFFER_SUFFIX;
 
+    unsigned int mmap_size = (unsigned int)(ALIGN_UP(jpegd_in_data.jpeg_data_size + kJpegDAddressAlgin, MAP_2M));
     // Initial address 128-byte alignment, large-page apply for memory
     unsigned char* addr_orig = (unsigned char*) mmap(
-            0, jpegd_in_data.jpeg_data_size + kJpegDAddressAlgin,
+            0, mmap_size,
             PROT_READ | PROT_WRITE,
             MAP_PRIVATE | MAP_ANONYMOUS | API_MAP_VA32BIT, -1, 0);
 
@@ -478,10 +479,7 @@ int DvppProcess::DvppJpegChangeToYuv(const char *input_buf, int input_size,
 
     // release buffer
     if (addr_orig != MAP_FAILED) {
-        munmap(addr_orig,
-               (unsigned) (ALIGN_UP(
-                       jpegd_in_data.jpeg_data_size + kJpegDAddressAlgin,
-                       MAP_2M)));
+        munmap(addr_orig, mmap_size);
     }
     return ret;
 }
