@@ -35,7 +35,8 @@
 #define ASCENDDK_ASCEND_EZDVPP_DVPP_DATA_TYPE_H_
 
 #include "dvpp/Vpc.h"
-#include "dvpp/dvpp_config.h"
+#include "dvpp/Jpeg.h"
+using namespace std;
 
 // The memory size of the BGR image is 3 times that of width*height.
 #define DVPP_BGR_BUFFER_MULTIPLE 3

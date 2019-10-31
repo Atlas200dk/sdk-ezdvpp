@@ -31,6 +31,7 @@
  * ============================================================================
  */
 
+#include <sys/mman.h>
 #include <malloc.h>
 #include "ascenddk/ascend_ezdvpp/dvpp_utils.h"
 

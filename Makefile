@@ -36,8 +36,8 @@ INC_DIR = \
 
 CC_FLAGS := $(INC_DIR) -std=c++11 -fPIC -Wall -O2
 LNK_FLAGS := \
-	-Wl,-rpath-link=$(DDK_HOME)/device/lib/ \
-	-L$(DDK_HOME)/device/lib/ \
+	-Wl,-rpath-link=$(NPU_DEVICE_LIB) \
+	-L$(NPU_DEVICE_LIB) \
 	-lhiai_common \
 	-lDvpp_api \
 	-shared
