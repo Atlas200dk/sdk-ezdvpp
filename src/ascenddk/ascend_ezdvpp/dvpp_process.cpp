@@ -36,6 +36,7 @@
 
 #include "securec.h"
 #include "dvpp/idvppapi.h"
+#include "hiaiengine/c_graph.h"
 #include "dvpp/dvpp_config.h"
 #include "ascenddk/ascend_ezdvpp/dvpp_process.h"
 #include "ascenddk/ascend_ezdvpp/dvpp_utils.h"
@@ -314,26 +315,12 @@ int DvppProcess::DvppYuvChangeToJpeg(const char *input_buf, int input_size,
         }
     }
 
-    unsigned int mmap_size = ALIGN_UP(input_data.bufSize + kJpegEAddressAlgin,
-                                      MAP_2M);
-
-    // apply for memory: 1.Large-page
-    unsigned char* addr_orig = (unsigned char*) mmap(
-            0, mmap_size, PROT_READ | PROT_WRITE,
-            MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB | API_MAP_VA32BIT,
-            -1, 0);
-    if (addr_orig == MAP_FAILED) {
-      ASC_LOG_ERROR(
-        "Failed to malloc memory in dvpp(yuv to jpeg), start to try 4K "
-        "memory.");
-      addr_orig = (unsigned char*) mmap(
-        0, mmap_size, PROT_READ | PROT_WRITE,
-        MAP_PRIVATE | MAP_ANONYMOUS | API_MAP_VA32BIT, -1, 0);
-      if (addr_orig == MAP_FAILED) {
-        ASC_LOG_ERROR("4K memory malloc still failed");
-        return kDvppErrorMallocFail;
+    unsigned int mmap_size = ALIGN_UP(input_data.bufSize + kJpegEAddressAlgin, MAP_2M);
+    unsigned char* addr_orig = (unsigned char*)HIAI_DVPP_DMalloc(mmap_size);
+    if (addr_orig == NULL) {
+        ASC_LOG_ERROR("Failed to malloc memory in dvpp(yuv to jpeg)");
+        return kDvppErrorMallocFail;    
     }
-  }
 
     // first address of buffer align to 128
     input_data.buf = (unsigned char*) ALIGN_UP((uint64_t ) addr_orig,
@@ -372,10 +359,8 @@ int DvppProcess::DvppYuvChangeToJpeg(const char *input_buf, int input_size,
     ret = DvppProc(input_data, output_data);
 
     // release buffer
-    if (addr_orig != MAP_FAILED) {
-        munmap(addr_orig,
-               (unsigned) (ALIGN_UP(input_data.bufSize + kJpegEAddressAlgin,
-                                    MAP_2M)));
+    if (addr_orig != NULL) {
+        HIAI_DVPP_DFree(addr_orig);
     }
 
     return ret;
@@ -428,14 +413,10 @@ int DvppProcess::DvppJpegChangeToYuv(const char *input_buf, int input_size,
     // than the actual bitstream.
     jpegd_in_data.jpeg_data_size = input_size + JPEGD_IN_BUFFER_SUFFIX;
 
-    unsigned int mmap_size = (unsigned int)(ALIGN_UP(jpegd_in_data.jpeg_data_size + kJpegDAddressAlgin, MAP_2M));
     // Initial address 128-byte alignment, large-page apply for memory
-    unsigned char* addr_orig = (unsigned char*) mmap(
-            0, mmap_size,
-            PROT_READ | PROT_WRITE,
-            MAP_PRIVATE | MAP_ANONYMOUS | API_MAP_VA32BIT, -1, 0);
-
-    if (addr_orig == MAP_FAILED) {
+    unsigned int mmap_size = (unsigned int)(ALIGN_UP(jpegd_in_data.jpeg_data_size + kJpegDAddressAlgin, MAP_2M));    
+    unsigned char* addr_orig = (unsigned char*)HIAI_DVPP_DMalloc(mmap_size);
+    if (addr_orig == NULL) {
         ASC_LOG_ERROR("Failed to malloc memory in dvpp(JpegD).");
         return kDvppErrorMallocFail;
     }
@@ -478,8 +459,8 @@ int DvppProcess::DvppJpegChangeToYuv(const char *input_buf, int input_size,
     }
 
     // release buffer
-    if (addr_orig != MAP_FAILED) {
-        munmap(addr_orig, mmap_size);
+    if (addr_orig != NULL) {
+        HIAI_DVPP_DFree(addr_orig);
     }
     return ret;
 }
@@ -605,26 +586,13 @@ int DvppProcess::DvppBasicVpc(const uint8_t *input_buf, int32_t input_size,
     int vpc_output_size = aligned_output_width * aligned_output_height
             * DVPP_YUV420SP_SIZE_MOLECULE /
     DVPP_YUV420SP_SIZE_DENOMINATOR;
-
+    
     // First, apply for large pages of memory. If the application fails, apply
     // for general memory.
-    uint8_t *out_buffer = (uint8_t *) mmap(
-            0, ALIGN_UP(vpc_output_size, MAP_2M),
-            PROT_READ | PROT_WRITE,
-            MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB | API_MAP_VA32BIT, -1, 0);
-
-    if (out_buffer == MAP_FAILED) {
-        ASC_LOG_ERROR(
-                "Failed to malloc memory in dvpp(new vpc), start to try 4K "
-                "memory");
-        out_buffer = (uint8_t *) mmap(
-                0, ALIGN_UP(vpc_output_size, MAP_2M),
-                PROT_READ | PROT_WRITE,
-                MAP_PRIVATE | MAP_ANONYMOUS | API_MAP_VA32BIT, -1, 0);
-        if (out_buffer == MAP_FAILED) {
-            ASC_LOG_ERROR("4K memory malloc still fail.");
-            return kDvppErrorMallocFail;
-        }
+    // Initial address 128-byte alignment, large-page apply for memory
+    uint8_t *out_buffer = (uint8_t*)HIAI_DVPP_DMalloc(ALIGN_UP(vpc_output_size, MAP_2M));
+    if (out_buffer == NULL) {
+        return kDvppErrorMallocFail;
     }
 
     // constructing output roi configuration
@@ -657,21 +625,21 @@ int DvppProcess::DvppBasicVpc(const uint8_t *input_buf, int32_t input_size,
             ASC_LOG_ERROR("call dvppctl process faild!");
             DestroyDvppApi(pi_dvpp_api);
             //free memory
-            munmap(in_buffer, (unsigned) (ALIGN_UP(in_buffer_size, MAP_2M)));
-            munmap(out_buffer, (unsigned) (ALIGN_UP(vpc_output_size, MAP_2M)));
+            HIAI_DVPP_DFree(in_buffer);
+            HIAI_DVPP_DFree(out_buffer);
             return kDvppErrorDvppCtlFail;
         }
     } else {  // create dvpp api fail, directly return
         ASC_LOG_ERROR("pi_dvpp_api is null!");
         DestroyDvppApi(pi_dvpp_api);
         //free memory
-        munmap(in_buffer, (unsigned) (ALIGN_UP(in_buffer_size, MAP_2M)));
-        munmap(out_buffer, (unsigned) (ALIGN_UP(vpc_output_size, MAP_2M)));
+        HIAI_DVPP_DFree(in_buffer);
+        HIAI_DVPP_DFree(out_buffer);
 
         return kDvppErrorCreateDvppFail;
     }
 
-    munmap(in_buffer, (unsigned) (ALIGN_UP(in_buffer_size, MAP_2M)));
+    HIAI_DVPP_DFree(in_buffer);
 
     // check image whether need to align
     int image_align = kImageNeedAlign;
@@ -726,7 +694,7 @@ int DvppProcess::DvppBasicVpc(const uint8_t *input_buf, int32_t input_size,
     }
 
     DestroyDvppApi(pi_dvpp_api);
-    munmap(out_buffer, (unsigned) (ALIGN_UP(vpc_output_size, MAP_2M)));
+    HIAI_DVPP_DFree(out_buffer);;
     return ret;
 }
 }

@@ -32,6 +32,7 @@
  */
 
 #include <malloc.h>
+#include "hiaiengine/c_graph.h"
 #include "ascenddk/ascend_ezdvpp/dvpp_utils.h"
 
 namespace ascend {
@@ -151,10 +152,7 @@ int DvppUtils::AllocInputBuffer(const uint8_t * src_data, int input_size,
                     / DVPP_YUV420SP_SIZE_DENOMINATOR;
 
             // input data address 128 byte alignment
-            *dest_data = (uint8_t *) mmap(
-                    0, ALIGN_UP(dest_buffer_size, MAP_2M),
-                    PROT_READ | PROT_WRITE,
-                    MAP_PRIVATE | MAP_ANONYMOUS | API_MAP_VA32BIT, -1, 0);
+            *dest_data = (uint8_t *) HIAI_DVPP_DMalloc(ALIGN_UP(dest_buffer_size, MAP_2M));
             CHECK_MMAP_RESULT(dest_data);
 
             // alloc yuv420sp buffer
@@ -173,10 +171,7 @@ int DvppUtils::AllocInputBuffer(const uint8_t * src_data, int input_size,
             dest_buffer_size = align_width * align_high * kYuv422SPWidthMul;
 
             // input data address 128 byte alignment
-            *dest_data = (uint8_t *) mmap(
-                    0, ALIGN_UP(dest_buffer_size, MAP_2M),
-                    PROT_READ | PROT_WRITE,
-                    MAP_PRIVATE | MAP_ANONYMOUS | API_MAP_VA32BIT, -1, 0);
+            *dest_data = (uint8_t *) HIAI_DVPP_DMalloc(ALIGN_UP(dest_buffer_size, MAP_2M));
             CHECK_MMAP_RESULT(dest_data);
 
             // alloc yuv422sp buffer
@@ -203,10 +198,7 @@ int DvppUtils::AllocInputBuffer(const uint8_t * src_data, int input_size,
                     + uv_align_width * align_high;
 
             // input data address 128 byte alignment
-            *dest_data = (uint8_t *) mmap(
-                    0, ALIGN_UP(dest_buffer_size, MAP_2M),
-                    PROT_READ | PROT_WRITE,
-                    MAP_PRIVATE | MAP_ANONYMOUS | API_MAP_VA32BIT, -1, 0);
+            *dest_data = (uint8_t *) HIAI_DVPP_DMalloc(ALIGN_UP(dest_buffer_size, MAP_2M));
             CHECK_MMAP_RESULT(dest_data);
 
             // alloc yuv444sp buffer
@@ -234,10 +226,7 @@ int DvppUtils::AllocInputBuffer(const uint8_t * src_data, int input_size,
             dest_buffer_size = align_width * align_high;
 
             // input data address 128 byte alignment
-            *dest_data = (uint8_t *) mmap(
-                    0, ALIGN_UP(dest_buffer_size, MAP_2M),
-                    PROT_READ | PROT_WRITE,
-                    MAP_PRIVATE | MAP_ANONYMOUS | API_MAP_VA32BIT, -1, 0);
+            *dest_data = (uint8_t *) HIAI_DVPP_DMalloc(ALIGN_UP(dest_buffer_size, MAP_2M));
             CHECK_MMAP_RESULT(dest_data);
 
             // alloc yuv422 packed buffer
@@ -263,10 +252,7 @@ int DvppUtils::AllocInputBuffer(const uint8_t * src_data, int input_size,
             dest_buffer_size = align_width * align_high;
 
             // input data address 128 byte alignment
-            *dest_data = (uint8_t *) mmap(
-                    0, ALIGN_UP(dest_buffer_size, MAP_2M),
-                    PROT_READ | PROT_WRITE,
-                    MAP_PRIVATE | MAP_ANONYMOUS | API_MAP_VA32BIT, -1, 0);
+            *dest_data = (uint8_t *) HIAI_DVPP_DMalloc(ALIGN_UP(dest_buffer_size, MAP_2M));
             CHECK_MMAP_RESULT(dest_data);
 
             // alloc yuv444 packed buffer
@@ -293,10 +279,7 @@ int DvppUtils::AllocInputBuffer(const uint8_t * src_data, int input_size,
             dest_buffer_size = align_width * align_high;
 
             // input data address 128 byte alignment
-            *dest_data = (uint8_t *) mmap(
-                    0, ALIGN_UP(dest_buffer_size, MAP_2M),
-                    PROT_READ | PROT_WRITE,
-                    MAP_PRIVATE | MAP_ANONYMOUS | API_MAP_VA32BIT, -1, 0);
+            *dest_data = (uint8_t *) HIAI_DVPP_DMalloc(ALIGN_UP(dest_buffer_size, MAP_2M));
             CHECK_MMAP_RESULT(dest_data);
 
             // alloc rgb888 packed buffer
@@ -325,10 +308,7 @@ int DvppUtils::AllocInputBuffer(const uint8_t * src_data, int input_size,
             dest_buffer_size = align_width * align_high;
 
             // input data address 128 byte alignment
-            *dest_data = (uint8_t *) mmap(
-                    0, ALIGN_UP(dest_buffer_size, MAP_2M),
-                    PROT_READ | PROT_WRITE,
-                    MAP_PRIVATE | MAP_ANONYMOUS | API_MAP_VA32BIT, -1, 0);
+            *dest_data = (uint8_t *) HIAI_DVPP_DMalloc(ALIGN_UP(dest_buffer_size, MAP_2M));
             CHECK_MMAP_RESULT(dest_data);
 
             // alloc xrgb8888 packed buffer
@@ -351,10 +331,7 @@ int DvppUtils::AllocInputBuffer(const uint8_t * src_data, int input_size,
                     / DVPP_YUV420SP_SIZE_DENOMINATOR;
 
             // input data address 128 byte alignment
-            *dest_data = (uint8_t *) mmap(
-                    0, ALIGN_UP(dest_buffer_size, MAP_2M),
-                    PROT_READ | PROT_WRITE,
-                    MAP_PRIVATE | MAP_ANONYMOUS | API_MAP_VA32BIT, -1, 0);
+            *dest_data = (uint8_t *) HIAI_DVPP_DMalloc(ALIGN_UP(dest_buffer_size, MAP_2M));
             CHECK_MMAP_RESULT(dest_data);
 
             // alloc yuv400sp buffer
