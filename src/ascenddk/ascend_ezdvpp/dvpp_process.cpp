@@ -44,10 +44,72 @@
 using namespace std;
 namespace ascend {
 namespace utils {
+
+void DvppVencQueue::WriteFrame(DvppOutput& h264_frame, unsigned int buffer_len, 
+                              unsigned char *frame_data, unsigned int frame_size) {
+    //std::shared_ptr<uint8_t> buffer = std::shared_ptr<uint8_t>(new uint8_t[buffer_len], 
+    //                                                           std::default_delete<uint8_t[]>());
+
+    h264_frame.size = buffer_len;
+    h264_frame.buffer = new uint8_t[buffer_len]; 
+    memcpy_s(h264_frame.buffer, h264_frame.size, frame_data,frame_size);   
+}
+
+int DvppVencQueue::Push(unsigned char *frame_data, unsigned int frame_size) {
+    DvppOutput h264_frame;
+
+    switch(status){
+        case VENC_STATUS_WAIT_HEAD:
+            WriteFrame(h264_head, frame_size, frame_data, frame_size);
+            status = VENC_STATUS_WAIT_FIRST_FRAME;
+            break;
+        case VENC_STATUS_WAIT_FIRST_FRAME:
+            WriteFrame(h264_frame, frame_size + h264_head.size, h264_head.buffer, h264_head.size);        	
+            memcpy_s(h264_frame.buffer + h264_head.size, h264_frame.size - h264_head.size, frame_data, frame_size);	
+            h264_frame_queue.Push(h264_frame);
+
+            status = VENC_STATUS_OK;
+            break;	
+        case VENC_STATUS_OK:
+            WriteFrame(h264_frame, frame_size, frame_data, frame_size);  
+            h264_frame_queue.Push(h264_frame);
+            break;
+        default:
+            ASC_LOG_ERROR("Unkonw venc status %d", status);
+            return kDvppErrorInvalidParameter;   
+    }
+    ASC_LOG_ERROR("Push h264 frame ok, size %d", frame_size);
+
+    return kDvppOperationOk;
+}
+
+int DvppVencQueue::Pop(DvppOutput* h264_frame) {
+    if (status != VENC_STATUS_OK) {
+        ASC_LOG_ERROR("The first h264 frame not ready");
+        return kDvppErrorNoOutputInfo;
+    }
+
+    if (h264_frame_queue.IsEmpty()) {
+        ASC_LOG_ERROR("No h264 data in queue");
+        return kDvppErrorNoOutputInfo;
+    }
+    *h264_frame = h264_frame_queue.Pop();
+
+    return kDvppOperationOk;
+}
+
 DvppProcess::DvppProcess(const DvppToJpgPara &para) {
     // construct a instance used to convert to JPG
     dvpp_instance_para_.jpg_para = para;
     convert_mode_ = kJpeg;
+}
+
+DvppProcess::DvppProcess(const DvppToH264Para &para){
+    // construct an instance used to convert to h264
+    dvpp_instance_para_.h264_para = para;
+    convert_mode_ = kH264;
+    venc_h264_queue = NULL;
+    venc_h264_handle = kInvalidVencHandle;
 }
 
 DvppProcess::DvppProcess(const DvppBasicVpcPara &para) {
@@ -64,14 +126,19 @@ DvppProcess::DvppProcess(const DvppJpegDInPara &para) {
 
 ascend::utils::DvppProcess::~DvppProcess() {
     // destructor
+    if (venc_h264_handle != kInvalidVencHandle)
+        DestroyVenc(venc_h264_handle);
 }
 
 int DvppProcess::DvppOperationProc(const char *input_buf, int input_size,
                                    DvppOutput *output_data) {
     int ret = kDvppOperationOk;
 
-    // yuv change to jpg
-    if (convert_mode_ == kJpeg) {
+    if (convert_mode_ ==kH264){
+
+        return DvppYuvChangeToH264(input_buf, input_size, output_data);        
+
+    } else if (convert_mode_ == kJpeg) {  // yuv change to jpg
         sJpegeOut jpg_output_data;
 
         // yuv change jpg
@@ -368,6 +435,72 @@ int DvppProcess::DvppYuvChangeToJpeg(const char *input_buf, int input_size,
 
 int DvppProcess::GetMode() const {
     return convert_mode_;
+}
+
+
+void VencCallBackDumpFile(struct VencOutMsg* vencOutMsg, void* userData)
+{
+	DvppVencQueue* output_queue = (DvppVencQueue*)userData;
+    
+    output_queue->Push(static_cast<unsigned char *>(vencOutMsg->outputData), vencOutMsg->outputDataSize);
+}
+
+int DvppProcess::DvppVencH264Init() {
+    if (venc_h264_handle != kInvalidVencHandle)
+        return kDvppOperationOk;
+
+    struct VencConfig venc_config;
+
+    venc_config.width = dvpp_instance_para_.h264_para.resolution.width;
+    venc_config.height = dvpp_instance_para_.h264_para.resolution.height;
+    venc_config.codingType = dvpp_instance_para_.h264_para.coding_type;
+    venc_config.yuvStoreType = dvpp_instance_para_.h264_para.yuv_store_type;
+    venc_config.keyFrameInterval = 16;
+    venc_config.vencOutMsgCallBack = VencCallBackDumpFile;  
+
+    venc_h264_queue = new DvppVencQueue(); 
+    venc_config.userData = (void *)venc_h264_queue;
+
+    venc_h264_handle = CreateVenc(&venc_config);
+    if (venc_h264_handle == kInvalidVencHandle) {
+        ASC_LOG_ERROR("CreateVenc fail");
+        return kDvppErrorCreateDvppFail;
+    }
+    ASC_LOG_ERROR("[h264]CreateVenc ok");
+    return kDvppOperationOk;
+}
+
+int DvppProcess::DvppYuvChangeToH264(const char * input_buf, int input_size, DvppOutput* output_data){
+
+    if (kDvppOperationOk != DvppVencH264Init()) {
+        ASC_LOG_ERROR("Encode h264 failed for create venc error");
+        return kDvppErrorCreateDvppFail;
+    }
+
+    struct VencInMsg venc_in_msg;
+    venc_in_msg.inputData = const_cast<char*>(input_buf);
+    venc_in_msg.inputDataSize = input_size;
+    venc_in_msg.keyFrameInterval = 16;
+    venc_in_msg.forceIFrame = 0;
+    venc_in_msg.eos = 0;
+
+    if (RunVenc(venc_h264_handle, &venc_in_msg) == -1) {
+        ASC_LOG_ERROR("h264 call video encode fail");
+		return kDvppErrorDvppCtlFail;
+    }
+    
+    for (int i = 0; i < 3; i++) {
+        if (kDvppOperationOk == venc_h264_queue->Pop(output_data)) {
+            ASC_LOG_ERROR("Get h264 frame ok, size %d", output_data->size);
+            return kDvppOperationOk;
+        }            
+        
+        ASC_LOG_ERROR("The %dth get h264 from queue failed, sleep and try later", i);
+        usleep(16000);        
+    }
+    
+    ASC_LOG_ERROR("yuv change to h264 end, failed");
+    return kDvppErrorDvppCtlFail;
 }
 
 void DvppProcess::PrintErrorInfo(int code) const {

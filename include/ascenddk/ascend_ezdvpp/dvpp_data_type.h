@@ -35,7 +35,8 @@
 #define ASCENDDK_ASCEND_EZDVPP_DVPP_DATA_TYPE_H_
 
 #include "dvpp/Vpc.h"
-#include "dvpp/dvpp_config.h"
+#include "dvpp/Jpeg.h"
+using namespace std;
 
 // The memory size of the BGR image is 3 times that of width*height.
 #define DVPP_BGR_BUFFER_MULTIPLE 3
@@ -111,6 +112,8 @@ const double kMinIncrease = 0.03125;
 // standard: 4096 * 4096 * 4 = 67108864 (64M)
 const int kAllowedMaxImageMemory = 67108864;
 
+const int kInvalidVencHandle = -1;
+
 struct ErrorDescription {
     int code;
     std::string code_info;
@@ -168,6 +171,16 @@ struct DvppToJpgPara {
     // false: Input image is not aligned; true: Input image is aligned
     bool is_align_image = false;
 };
+
+struct DvppToH264Para
+{
+    int coding_type = 3;
+
+    int yuv_store_type = 0;
+
+    ResolutionRatio resolution;
+};
+
 
 struct DvppOutput {
     unsigned char *buffer;  // output buffer
@@ -229,6 +242,7 @@ struct DvppJpegDOutput {
 
 struct DvppPara {
     DvppToJpgPara jpg_para;
+    DvppToH264Para h264_para;
     DvppJpegDInPara jpegd_para;
     DvppBasicVpcPara basic_vpc_para;
 };
