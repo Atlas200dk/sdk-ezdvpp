@@ -32,7 +32,7 @@
  */
 
 #include <malloc.h>
-#include "hiaiengine/c_graph.h"
+#include "hiaiengine/ai_memory.h"
 #include "ascenddk/ascend_ezdvpp/dvpp_utils.h"
 
 namespace ascend {
@@ -152,7 +152,7 @@ int DvppUtils::AllocInputBuffer(const uint8_t * src_data, int input_size,
                     / DVPP_YUV420SP_SIZE_DENOMINATOR;
 
             // input data address 128 byte alignment
-            *dest_data = (uint8_t *) HIAI_DVPP_DMalloc(ALIGN_UP(dest_buffer_size, MAP_2M));
+            *dest_data = (uint8_t *)DvppDMalloc(ALIGN_UP(dest_buffer_size, MAP_2M));
             CHECK_MMAP_RESULT(dest_data);
 
             // alloc yuv420sp buffer
@@ -171,7 +171,7 @@ int DvppUtils::AllocInputBuffer(const uint8_t * src_data, int input_size,
             dest_buffer_size = align_width * align_high * kYuv422SPWidthMul;
 
             // input data address 128 byte alignment
-            *dest_data = (uint8_t *) HIAI_DVPP_DMalloc(ALIGN_UP(dest_buffer_size, MAP_2M));
+            *dest_data = DvppDMalloc(ALIGN_UP(dest_buffer_size, MAP_2M));
             CHECK_MMAP_RESULT(dest_data);
 
             // alloc yuv422sp buffer
@@ -198,7 +198,7 @@ int DvppUtils::AllocInputBuffer(const uint8_t * src_data, int input_size,
                     + uv_align_width * align_high;
 
             // input data address 128 byte alignment
-            *dest_data = (uint8_t *) HIAI_DVPP_DMalloc(ALIGN_UP(dest_buffer_size, MAP_2M));
+            *dest_data = DvppDMalloc(ALIGN_UP(dest_buffer_size, MAP_2M));
             CHECK_MMAP_RESULT(dest_data);
 
             // alloc yuv444sp buffer
@@ -226,7 +226,7 @@ int DvppUtils::AllocInputBuffer(const uint8_t * src_data, int input_size,
             dest_buffer_size = align_width * align_high;
 
             // input data address 128 byte alignment
-            *dest_data = (uint8_t *) HIAI_DVPP_DMalloc(ALIGN_UP(dest_buffer_size, MAP_2M));
+            *dest_data = DvppDMalloc(ALIGN_UP(dest_buffer_size, MAP_2M));
             CHECK_MMAP_RESULT(dest_data);
 
             // alloc yuv422 packed buffer
@@ -252,7 +252,7 @@ int DvppUtils::AllocInputBuffer(const uint8_t * src_data, int input_size,
             dest_buffer_size = align_width * align_high;
 
             // input data address 128 byte alignment
-            *dest_data = (uint8_t *) HIAI_DVPP_DMalloc(ALIGN_UP(dest_buffer_size, MAP_2M));
+            *dest_data = DvppDMalloc(ALIGN_UP(dest_buffer_size, MAP_2M));
             CHECK_MMAP_RESULT(dest_data);
 
             // alloc yuv444 packed buffer
@@ -279,7 +279,7 @@ int DvppUtils::AllocInputBuffer(const uint8_t * src_data, int input_size,
             dest_buffer_size = align_width * align_high;
 
             // input data address 128 byte alignment
-            *dest_data = (uint8_t *) HIAI_DVPP_DMalloc(ALIGN_UP(dest_buffer_size, MAP_2M));
+            *dest_data = DvppDMalloc(ALIGN_UP(dest_buffer_size, MAP_2M));
             CHECK_MMAP_RESULT(dest_data);
 
             // alloc rgb888 packed buffer
@@ -308,7 +308,7 @@ int DvppUtils::AllocInputBuffer(const uint8_t * src_data, int input_size,
             dest_buffer_size = align_width * align_high;
 
             // input data address 128 byte alignment
-            *dest_data = (uint8_t *) HIAI_DVPP_DMalloc(ALIGN_UP(dest_buffer_size, MAP_2M));
+            *dest_data = DvppDMalloc(ALIGN_UP(dest_buffer_size, MAP_2M));
             CHECK_MMAP_RESULT(dest_data);
 
             // alloc xrgb8888 packed buffer
@@ -331,7 +331,7 @@ int DvppUtils::AllocInputBuffer(const uint8_t * src_data, int input_size,
                     / DVPP_YUV420SP_SIZE_DENOMINATOR;
 
             // input data address 128 byte alignment
-            *dest_data = (uint8_t *) HIAI_DVPP_DMalloc(ALIGN_UP(dest_buffer_size, MAP_2M));
+            *dest_data = DvppDMalloc(ALIGN_UP(dest_buffer_size, MAP_2M));
             CHECK_MMAP_RESULT(dest_data);
 
             // alloc yuv400sp buffer
@@ -521,5 +521,39 @@ int DvppUtils::AllocYuvOrRgbPackedBuffer(const uint8_t * src_data,
     }
     return kDvppOperationOk;
 }
+
+
+uint8_t* DvppUtils::DvppDMalloc(uint32_t size) {
+    if (kDvppOperationOk != CheckDataSize(size)) {
+        ASC_LOG_ERROR("Size %d excessive 64M", size);
+        return nullptr;
+    }
+    
+	uint8_t *buffer = nullptr;
+	HIAI_StatusT ret = hiai::HIAIMemory::HIAI_DVPP_DMalloc(size, (void *&)buffer);
+	if (ret != HIAI_OK) {
+		if (buffer != nullptr) {
+			hiai::HIAIMemory::HIAI_DVPP_DFree(buffer);
+		}
+		ASC_LOG_ERROR("Malloc memory faild for return error");
+		return nullptr;
+	}
+	if (buffer == nullptr) {
+		ASC_LOG_ERROR("Malloc memory faild for buffer is null"); 
+		return nullptr;
+	}
+    ASC_LOG_INFO("xxxxx DvppDMalloc memory 0x%x", buffer);
+	return buffer;
+}
+
+void DvppUtils::DvppDFree(uint8_t* data) {
+	if (data != NULL) {
+         ASC_LOG_INFO("xxxxx DvppDFree memory 0x%x", data);
+         hiai::HIAIMemory::HIAI_DVPP_DFree(data);
+    }
+		
+	
+}
+
 } /* namespace utils */
 } /* namespace ascend */

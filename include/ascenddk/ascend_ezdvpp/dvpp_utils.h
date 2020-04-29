@@ -37,6 +37,7 @@
 #include "dvpp_data_type.h"
 #include "hiaiengine/log.h"
 
+
 #define CHECK_MEMCPY_RESULT(ret, buffer) \
 if (ret != EOK) { \
     ASC_LOG_ERROR("Failed to copy memory,Ret=%d.", ret); \
@@ -50,8 +51,8 @@ if (ret != EOK) { \
 #define CHECK_CROP_RESIZE_MEMCPY_RESULT(ret, buffer_size, buffer) \
 if (ret != EOK) { \
     ASC_LOG_ERROR("Failed to copy memory,Ret=%d.", ret); \
-    if (buffer != MAP_FAILED) { \
-        munmap(buffer, (unsigned) (ALIGN_UP(buffer_size, MAP_2M))); \
+    if (buffer != nullptr) { \
+        DvppUtils::DvppDFree(buffer); \
     } \
     return kDvppErrorMemcpyFail; \
 }
@@ -59,9 +60,9 @@ if (ret != EOK) { \
 #define CHECK_VPC_MEMCPY_S_RESULT(err_ret, buffer, buffer_size, p_dvpp_api) \
 if (err_ret != EOK) { \
     ASC_LOG_ERROR("Failed to copy memory,Ret=%d.", err_ret); \
-    if (buffer != MAP_FAILED) \
+    if (buffer != nullptr) \
     { \
-        munmap(buffer, (unsigned) (ALIGN_UP(buffer_size, MAP_2M))); \
+        DvppUtils::DvppDFree(buffer); \
     } \
     IDVPPAPI *dvpp_api = p_dvpp_api; \
     if (p_dvpp_api != nullptr) \
@@ -78,13 +79,16 @@ if (buffer == nullptr) { \
 }
 
 #define CHECK_MMAP_RESULT(buffer) \
-if (buffer == MAP_FAILED) { \
+if (buffer == nullptr) { \
     ASC_LOG_ERROR("Failed to malloc memory according to use mmap."); \
     return kDvppErrorNewFail; \
 }
 
 #define ASC_LOG_ERROR(fmt, ...) \
 HIAI_ENGINE_LOG(HIAI_GRAPH_INVALID_VALUE, "[%s:%d] " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__)
+
+#define ASC_LOG_INFO(fmt, ...) \
+HIAI_ENGINE_LOG("[%s:%d] " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__)
 
 namespace ascend {
 namespace utils {
@@ -274,6 +278,19 @@ public:
                                          int dest_align_width, int high,
                                          int align_high, int dest_buffer_size,
                                          uint8_t * dest_data);
+    
+    /**
+     * @brief malloc memory by HIAI_Dvpp_DMalloc
+     * @param [in] memory size
+     * @return memory pointer
+     */
+    static uint8_t* DvppDMalloc(uint32_t size);
+
+    /**
+     * @brief free memory that malloc by HIAI_Dvpp_DMalloc
+     * @param [in] memory pointer
+     */
+    static void DvppDFree(uint8_t* data);
 
 };
 

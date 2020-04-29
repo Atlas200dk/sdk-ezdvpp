@@ -36,7 +36,6 @@
 
 #include "securec.h"
 #include "dvpp/idvppapi.h"
-#include "hiaiengine/c_graph.h"
 #include "dvpp/dvpp_config.h"
 #include "ascenddk/ascend_ezdvpp/dvpp_process.h"
 #include "ascenddk/ascend_ezdvpp/dvpp_utils.h"
@@ -44,10 +43,70 @@
 using namespace std;
 namespace ascend {
 namespace utils {
+
+void DvppVencQueue::WriteFrame(DvppOutput& h264_frame, unsigned int buffer_len, 
+                              unsigned char *frame_data, unsigned int frame_size) {
+    //std::shared_ptr<uint8_t> buffer = std::shared_ptr<uint8_t>(new uint8_t[buffer_len], 
+    //                                                           std::default_delete<uint8_t[]>());
+
+    h264_frame.size = buffer_len;
+    h264_frame.buffer = new uint8_t[buffer_len]; 
+    memcpy_s(h264_frame.buffer, h264_frame.size, frame_data,frame_size);   
+}
+
+int DvppVencQueue::Push(unsigned char *frame_data, unsigned int frame_size) {
+    DvppOutput h264_frame;
+
+    switch(status){
+        case VENC_STATUS_WAIT_HEAD:
+            WriteFrame(h264_head, frame_size, frame_data, frame_size);
+            status = VENC_STATUS_WAIT_FIRST_FRAME;
+            break;
+        case VENC_STATUS_WAIT_FIRST_FRAME:
+            WriteFrame(h264_frame, frame_size + h264_head.size, h264_head.buffer, h264_head.size);        	
+            memcpy_s(h264_frame.buffer + h264_head.size, h264_frame.size - h264_head.size, frame_data, frame_size);	
+            h264_frame_queue.Push(h264_frame);
+
+            status = VENC_kDvppOperationOk;
+            break;	
+        case VENC_kDvppOperationOk:
+            WriteFrame(h264_frame, frame_size, frame_data, frame_size);  
+            h264_frame_queue.Push(h264_frame);
+            break;
+        default:
+            ASC_LOG_ERROR("Unkonw venc status %d", status);
+            return kDvppErrorInvalidParameter;   
+    }
+
+    return kDvppOperationOk;
+}
+
+int DvppVencQueue::Pop(DvppOutput* h264_frame) {
+    if (status != VENC_kDvppOperationOk) {
+        ASC_LOG_ERROR("The first h264 frame not ready");
+        return kDvppErrorNoOutputInfo;
+    }
+
+    if (h264_frame_queue.IsEmpty()) {
+        return kDvppErrorNoOutputInfo;
+    }
+    *h264_frame = h264_frame_queue.Pop();
+
+    return kDvppOperationOk;
+}
+
 DvppProcess::DvppProcess(const DvppToJpgPara &para) {
     // construct a instance used to convert to JPG
     dvpp_instance_para_.jpg_para = para;
     convert_mode_ = kJpeg;
+}
+
+DvppProcess::DvppProcess(const DvppToH264Para &para){
+    // construct an instance used to convert to h264
+    dvpp_instance_para_.h264_para = para;
+    convert_mode_ = kH264;
+    venc_h264_queue = NULL;
+    venc_h264_handle = kInvalidVencHandle;
 }
 
 DvppProcess::DvppProcess(const DvppBasicVpcPara &para) {
@@ -62,16 +121,32 @@ DvppProcess::DvppProcess(const DvppJpegDInPara &para) {
     convert_mode_ = kJpegD;
 }
 
+DvppProcess::DvppProcess(const DvppVdecPara &para) {
+    dvpp_instance_para_.vdec_para = para;
+    video_decoder = new DvppVideoDecoder(para.channel_id,
+                                        para.resolution);
+    convert_mode_ = kVdec;
+}
+
 ascend::utils::DvppProcess::~DvppProcess() {
     // destructor
+    if (convert_mode_ == kH264) {
+        if (venc_h264_handle != kInvalidVencHandle)
+            DestroyVenc(venc_h264_handle);
+    } else if (convert_mode_ == kVdec) {
+        delete video_decoder;
+    }
 }
 
 int DvppProcess::DvppOperationProc(const char *input_buf, int input_size,
                                    DvppOutput *output_data) {
     int ret = kDvppOperationOk;
 
-    // yuv change to jpg
-    if (convert_mode_ == kJpeg) {
+    if (convert_mode_ ==kH264){
+
+        return DvppYuvChangeToH264(input_buf, input_size, output_data);        
+
+    } else if (convert_mode_ == kJpeg) {  // yuv change to jpg
         sJpegeOut jpg_output_data;
 
         // yuv change jpg
@@ -316,7 +391,7 @@ int DvppProcess::DvppYuvChangeToJpeg(const char *input_buf, int input_size,
     }
 
     unsigned int mmap_size = ALIGN_UP(input_data.bufSize + kJpegEAddressAlgin, MAP_2M);
-    unsigned char* addr_orig = (unsigned char*)HIAI_DVPP_DMalloc(mmap_size);
+    unsigned char* addr_orig = DvppUtils::DvppDMalloc(mmap_size);
     if (addr_orig == NULL) {
         ASC_LOG_ERROR("Failed to malloc memory in dvpp(yuv to jpeg)");
         return kDvppErrorMallocFail;    
@@ -358,16 +433,77 @@ int DvppProcess::DvppYuvChangeToJpeg(const char *input_buf, int input_size,
     // call dvpp
     ret = DvppProc(input_data, output_data);
 
-    // release buffer
-    if (addr_orig != NULL) {
-        HIAI_DVPP_DFree(addr_orig);
-    }
+    DvppUtils::DvppDFree(addr_orig);
 
     return ret;
 }
 
 int DvppProcess::GetMode() const {
     return convert_mode_;
+}
+
+
+void VencCallBackDumpFile(struct VencOutMsg* vencOutMsg, void* userData)
+{
+	DvppVencQueue* output_queue = (DvppVencQueue*)userData;
+    
+    output_queue->Push(static_cast<unsigned char *>(vencOutMsg->outputData), vencOutMsg->outputDataSize);
+}
+
+int DvppProcess::DvppVencH264Init() {
+    if (venc_h264_handle != kInvalidVencHandle)
+        return kDvppOperationOk;
+
+    struct VencConfig venc_config;
+
+    venc_config.width = dvpp_instance_para_.h264_para.resolution.width;
+    venc_config.height = dvpp_instance_para_.h264_para.resolution.height;
+    venc_config.codingType = dvpp_instance_para_.h264_para.coding_type;
+    venc_config.yuvStoreType = dvpp_instance_para_.h264_para.yuv_store_type;
+    venc_config.keyFrameInterval = 16;
+    venc_config.vencOutMsgCallBack = VencCallBackDumpFile;  
+
+    venc_h264_queue = new DvppVencQueue(); 
+    venc_config.userData = (void *)venc_h264_queue;
+
+    venc_h264_handle = CreateVenc(&venc_config);
+    if (venc_h264_handle == kInvalidVencHandle) {
+        ASC_LOG_ERROR("CreateVenc fail");
+        return kDvppErrorCreateDvppFail;
+    }
+
+    return kDvppOperationOk;
+}
+
+int DvppProcess::DvppYuvChangeToH264(const char * input_buf, int input_size, DvppOutput* output_data){
+
+    if (kDvppOperationOk != DvppVencH264Init()) {
+        ASC_LOG_ERROR("Encode h264 failed for create venc error");
+        return kDvppErrorCreateDvppFail;
+    }
+
+    struct VencInMsg venc_in_msg;
+    venc_in_msg.inputData = const_cast<char*>(input_buf);
+    venc_in_msg.inputDataSize = input_size;
+    venc_in_msg.keyFrameInterval = 16;
+    venc_in_msg.forceIFrame = 0;
+    venc_in_msg.eos = 0;
+
+    if (RunVenc(venc_h264_handle, &venc_in_msg) == -1) {
+        ASC_LOG_ERROR("h264 call video encode fail");
+		return kDvppErrorDvppCtlFail;
+    }
+    
+    for (int i = 0; i < 3; i++) {
+        if (kDvppOperationOk == venc_h264_queue->Pop(output_data)) {
+            return kDvppOperationOk;
+        }            
+        
+        usleep(16000);        
+    }
+    
+    ASC_LOG_ERROR("yuv change to h264 end, failed");
+    return kDvppErrorDvppCtlFail;
 }
 
 void DvppProcess::PrintErrorInfo(int code) const {
@@ -400,9 +536,8 @@ int DvppProcess::DvppJpegChangeToYuv(const char *input_buf, int input_size,
     int ret = DvppUtils::CheckJpegChangeToYuvParam(input_buf, input_size,
                                                    output_data);
     if (ret != kDvppOperationOk) {
-        ASC_LOG_ERROR(
-                "Jpeg change to yuv input param or output param can not be "
-                "null!");
+        ASC_LOG_ERROR("Jpeg change to yuv input param or output param "
+                      "can not be null!");
         return ret;
     }
 
@@ -415,7 +550,7 @@ int DvppProcess::DvppJpegChangeToYuv(const char *input_buf, int input_size,
 
     // Initial address 128-byte alignment, large-page apply for memory
     unsigned int mmap_size = (unsigned int)(ALIGN_UP(jpegd_in_data.jpeg_data_size + kJpegDAddressAlgin, MAP_2M));    
-    unsigned char* addr_orig = (unsigned char*)HIAI_DVPP_DMalloc(mmap_size);
+    unsigned char* addr_orig = DvppUtils::DvppDMalloc(mmap_size);
     if (addr_orig == NULL) {
         ASC_LOG_ERROR("Failed to malloc memory in dvpp(JpegD).");
         return kDvppErrorMallocFail;
@@ -447,21 +582,19 @@ int DvppProcess::DvppJpegChangeToYuv(const char *input_buf, int input_size,
         // call DVPP  JPEGD to process
         if (DvppCtl(dvpp_api, DVPP_CTL_JPEGD_PROC, &dvpp_api_ctl_msg)
                 != kDvppOperationOk) {
-            ASC_LOG_ERROR("call dvppctl process failed\n");
+            ASC_LOG_ERROR("call dvppctl process failed");
             ret = kDvppErrorDvppCtlFail;
         }
 
         // free dvppapi handle
         DestroyDvppApi(dvpp_api);
     } else {
-        ASC_LOG_ERROR("can not create dvpp api\n");
+        ASC_LOG_ERROR("can not create dvpp api");
         ret = kDvppErrorCreateDvppFail;
     }
 
-    // release buffer
-    if (addr_orig != NULL) {
-        HIAI_DVPP_DFree(addr_orig);
-    }
+    DvppUtils::DvppDFree(addr_orig);
+
     return ret;
 }
 
@@ -473,7 +606,9 @@ int DvppProcess::DvppBasicVpc(const uint8_t *input_buf, int32_t input_size,
 
     if (ret != kDvppOperationOk) {
         ASC_LOG_ERROR(
-                "input_buf and output_buf can not be null, input_size and " "output_size can not less than 0, now input_size is %d and " "output_size is %d !",
+                "input_buf and output_buf can not be null, input_size and " 
+                "output_size can not less than 0, now input_size is %d and " 
+                "output_size is %d !",
                 input_size, output_size);
         return ret;
     }
@@ -590,7 +725,7 @@ int DvppProcess::DvppBasicVpc(const uint8_t *input_buf, int32_t input_size,
     // First, apply for large pages of memory. If the application fails, apply
     // for general memory.
     // Initial address 128-byte alignment, large-page apply for memory
-    uint8_t *out_buffer = (uint8_t*)HIAI_DVPP_DMalloc(ALIGN_UP(vpc_output_size, MAP_2M));
+    uint8_t *out_buffer = DvppUtils::DvppDMalloc(ALIGN_UP(vpc_output_size, MAP_2M));
     if (out_buffer == NULL) {
         return kDvppErrorMallocFail;
     }
@@ -625,21 +760,21 @@ int DvppProcess::DvppBasicVpc(const uint8_t *input_buf, int32_t input_size,
             ASC_LOG_ERROR("call dvppctl process faild!");
             DestroyDvppApi(pi_dvpp_api);
             //free memory
-            HIAI_DVPP_DFree(in_buffer);
-            HIAI_DVPP_DFree(out_buffer);
+            DvppUtils::DvppDFree(in_buffer);
+            DvppUtils::DvppDFree(out_buffer);
             return kDvppErrorDvppCtlFail;
         }
     } else {  // create dvpp api fail, directly return
         ASC_LOG_ERROR("pi_dvpp_api is null!");
         DestroyDvppApi(pi_dvpp_api);
         //free memory
-        HIAI_DVPP_DFree(in_buffer);
-        HIAI_DVPP_DFree(out_buffer);
+        DvppUtils::DvppDFree(in_buffer);
+        DvppUtils::DvppDFree(out_buffer);
 
         return kDvppErrorCreateDvppFail;
     }
 
-    HIAI_DVPP_DFree(in_buffer);
+    DvppUtils::DvppDFree(in_buffer);
 
     // check image whether need to align
     int image_align = kImageNeedAlign;
@@ -694,8 +829,45 @@ int DvppProcess::DvppBasicVpc(const uint8_t *input_buf, int32_t input_size,
     }
 
     DestroyDvppApi(pi_dvpp_api);
-    HIAI_DVPP_DFree(out_buffer);;
+
     return ret;
 }
+
+int DvppProcess::DvppVdecDecode(VideoFrameData** output_frame_image, 
+                                VideoFrameData* input_video_frame) {
+    if (convert_mode_ != kVdec) {
+        ASC_LOG_ERROR("Current mode is %d, not video decode", convert_mode_);
+        return kDvppErrorMode;
+    }
+
+    if (video_decoder == NULL) {
+        ASC_LOG_ERROR("Video decoder is not created!");
+        return kDvppErrorVdecNotExist;
+    }
+
+    int ret = video_decoder->Decode(input_video_frame);
+    if (ret != kDvppOperationOk) {
+        ASC_LOG_ERROR("Decode video return %d", ret);
+        return ret;
+    }
+
+    *output_frame_image = video_decoder->Read();
+    if (output_frame_image == NULL) {
+        ASC_LOG_ERROR("Read decoded frame failed");
+        return kDvppErrorVdecReadFrame;
+    }
+
+    return kDvppOperationOk;
+}
+
+VideoFrameData* DvppProcess::DvppVdecRead() {
+    if (convert_mode_ != kVdec) {
+        ASC_LOG_ERROR("Current mode is %d, not video decode", convert_mode_);
+        return NULL;
+    }
+
+    return video_decoder->Read();
+}
+
 }
 }

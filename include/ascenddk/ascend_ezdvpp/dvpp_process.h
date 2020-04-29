@@ -35,9 +35,35 @@
 #define ASCENDDK_ASCEND_EZDVPP_DVPP_PROCESS_H_
 
 #include "dvpp_data_type.h"
+#include "circle_queue.h"
+#include "dvpp_vdec.h"
 
 namespace ascend {
 namespace utils {
+
+const int kVencH264QueueSize = 8;
+enum {
+    VENC_STATUS_WAIT_HEAD = 0,
+    VENC_STATUS_WAIT_FIRST_FRAME,
+    VENC_kDvppOperationOk 
+};
+
+
+class DvppVencQueue {
+public:
+    DvppVencQueue():status(VENC_STATUS_WAIT_HEAD){}
+    ~DvppVencQueue(){}
+    
+    void WriteFrame(DvppOutput& h264_frame, unsigned int buffer_len, 
+                    unsigned char *frame_data, unsigned int frame_size);
+    int Push(unsigned char *buffer, unsigned int size);
+    int Pop(DvppOutput* h264_frame);
+
+private:
+    int status;
+    DvppOutput h264_head;
+    CircleQueue<DvppOutput, kVencH264QueueSize> h264_frame_queue;  
+};
 
 /*
  *
@@ -52,6 +78,12 @@ public:
 
     /**
      * @brief class constructor
+     * @param [in] DvppToJpgPara para: instance h264 object
+     */
+    DvppProcess(const DvppToH264Para &para);
+
+    /**
+     * @brief class constructor
      * @param [in] DvppBasicVpcPara para: instance basic vpc object
      */
     DvppProcess(const DvppBasicVpcPara &para);
@@ -61,6 +93,8 @@ public:
      * @param [in] DvppJpegDInPara para: instance jpeg decode object
      */
     DvppProcess(const DvppJpegDInPara &para);
+
+    DvppProcess(const DvppVdecPara &para);
 
     //class destructor
     virtual ~DvppProcess();
@@ -96,6 +130,10 @@ public:
     int DvppBasicVpcProc(const uint8_t *input_buf, int32_t input_size,
                          DvppVpcOutput *output_data);
 
+    int DvppVdecDecode(VideoFrameData** output_frame_image, 
+                       VideoFrameData* input_video_frame);
+    VideoFrameData* DvppVdecRead();
+
     /**
      * @brief get a error message according to error code.
      * @param [in] int code: error code.
@@ -128,6 +166,19 @@ private:
      */
     int DvppProc(const sJpegeIn &input_data, sJpegeOut *output_data);
 
+    int DvppVencH264Init();
+
+    /**
+     * @brief Dvpp change from yuv to h264
+     * @param [in] char *input_buf: yuv data buffer
+     *             (dvpp need char *,so pInputBuf do not use const)
+     * @param [in] int input_size  : size of yuv data buffer
+     * @param [out]shared_ptr<AutoBuffer> *output_buf :dvpp output buffer
+     *        and size
+     * @return  enum DvppErrorCode
+     */
+    int DvppYuvChangeToH264(const char * input_buf, int input_size,DvppOutput* output_data);
+
     /**
      * @brief new vpc interface, include crop/resize/image format conversion
      * @param [in] input_buf:input image data
@@ -154,6 +205,11 @@ private:
 
     // DVPP instance mode(jpg or h264).
     int convert_mode_;
+
+    int32_t venc_h264_handle;
+    DvppVencQueue* venc_h264_queue;
+
+    DvppVideoDecoder* video_decoder;
 };
 }
 }

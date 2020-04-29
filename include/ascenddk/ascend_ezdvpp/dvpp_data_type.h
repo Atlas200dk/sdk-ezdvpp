@@ -35,7 +35,9 @@
 #define ASCENDDK_ASCEND_EZDVPP_DVPP_DATA_TYPE_H_
 
 #include "dvpp/Vpc.h"
-#include "dvpp/dvpp_config.h"
+#include "dvpp/Jpeg.h"
+#include "hiaiengine/data_type.h"
+using namespace std;
 
 // The memory size of the BGR image is 3 times that of width*height.
 #define DVPP_BGR_BUFFER_MULTIPLE 3
@@ -43,6 +45,9 @@
 // The memory size of the YUV image is 1.5 times that of width*height.
 #define DVPP_YUV420SP_SIZE_MOLECULE    3
 #define DVPP_YUV420SP_SIZE_DENOMINATOR 2
+#define DVPP_YUV420SP_SIZE(width, height) \
+          ((width) * (height) \
+           * DVPP_YUV420SP_SIZE_MOLECULE / DVPP_YUV420SP_SIZE_DENOMINATOR)
 
 namespace ascend {
 namespace utils {
@@ -111,6 +116,14 @@ const double kMinIncrease = 0.03125;
 // standard: 4096 * 4096 * 4 = 67108864 (64M)
 const int kAllowedMaxImageMemory = 67108864;
 
+const int kInvalidVencHandle = -1;
+
+const int kVdecSingleton = 0; // dvpp vdec singleton parameter
+const int kEnQueueInterval = 10000; // Entry queue wait time: 10ms
+const int kEnQueueRetryTimes = 10; // Entry queue retry times
+const int kOutQueueInterval = 10000; // Out queue wait time: 10ms
+const int kOutQueueRetryTimes = 3; // Out queue retry times
+
 struct ErrorDescription {
     int code;
     std::string code_info;
@@ -134,6 +147,7 @@ enum CaptureObjFlag {
     kYuv,  // bgr convert to yuv
     kCropOrResize,  // crop or resize image
     kJpegD,  // jpg convert to yuv
+    kVdec,
     kBasicVpc,
 };
 
@@ -147,8 +161,22 @@ enum DvppErrorCode {
     kDvppErrorMemcpyFail = -6,
     kDvppErrorNewFail = -7,
     kDvppErrorCheckMemorySizeFail = -8,
-}
-;
+    kDvppErrorVdecExceed = -9,
+    kDvppErrorVdecInit = -10,
+    kDvppErrorVdecCtl = -11,
+    kDvppErrorVdecNotExist = -12,
+    kDvppErrorVdecReadFrame = -13,
+    kDvppErrorVdec = -14,
+    kDvppErrorQueueFull = -15,
+    kDvppErrorQueueEmpty = -16,
+    kDvppErrorMode = -17,
+};
+
+enum VideoType {
+	kVideoH264,
+	kVideoH265,
+	kInvalidTpye
+};
 
 struct ResolutionRatio {
     int width = 0;
@@ -169,10 +197,51 @@ struct DvppToJpgPara {
     bool is_align_image = false;
 };
 
+struct DvppToH264Para
+{
+    int coding_type = 3;
+
+    int yuv_store_type = 0;
+
+    ResolutionRatio resolution;
+};
+
+
 struct DvppOutput {
     unsigned char *buffer;  // output buffer
     unsigned int size;  // size of output buffer
 };
+
+struct VideoFrameData {
+    bool is_finished;
+    int channel_id;
+    uint32_t frame_id;
+    uint32_t frame_width;
+    uint32_t frame_height;
+    VideoType video_type;
+    std::string channel_name;
+    hiai::ImageData<u_int8_t> image;
+
+  VideoFrameData& operator=(VideoFrameData& value) {
+    is_finished = value.is_finished;
+    channel_id = value.channel_id;
+    frame_id = value.frame_id;
+    frame_width = value.frame_width;
+    frame_height = value.frame_height;
+    video_type = value.video_type;
+    channel_name = value.channel_name;
+    image = value.image;
+    
+    return *this;
+  }
+};
+
+template<class Archive>
+void serialize(Archive& ar, VideoFrameData& data) {
+    ar(data.is_finished, data.channel_id, data.frame_id, data.frame_width, 
+       data.frame_height, data.video_type, data.channel_name);
+}
+
 
 struct DvppBasicVpcPara {
     // input image format
@@ -217,6 +286,11 @@ struct DvppJpegDInPara {
 // false:jpg retain original sampling format
 };
 
+struct DvppVdecPara {
+    int channel_id;
+    ResolutionRatio resolution;
+};
+
 struct DvppJpegDOutput {
     unsigned char *buffer;  // output buffer
     uint32_t buffer_size;  // output buffer size
@@ -229,8 +303,10 @@ struct DvppJpegDOutput {
 
 struct DvppPara {
     DvppToJpgPara jpg_para;
+    DvppToH264Para h264_para;
     DvppJpegDInPara jpegd_para;
     DvppBasicVpcPara basic_vpc_para;
+    DvppVdecPara vdec_para;
 };
 }
 }
